@@ -1,0 +1,20 @@
+# Reuse the prepared standalone ai-service stack and its model cache.
+# Start ai-service/docker-compose.yml first; do not enable root real/mock profiles.
+services:
+  api:
+    environment:
+      AI_EXPECTED_MODE: real
+      AI_BASE_URL: http://ai-service:8000
+    networks: [default, prepared-ai]
+  worker:
+    environment:
+      AI_EXPECTED_MODE: real
+      AI_BASE_URL: http://ai-service:8000
+    networks: [default, prepared-ai]
+  migrate:
+    environment:
+      AI_EXPECTED_MODE: real
+networks:
+  prepared-ai:
+    external: true
+    name: ${AI_NETWORK:-ai-service_default}

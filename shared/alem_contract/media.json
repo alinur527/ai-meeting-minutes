@@ -1,0 +1,6 @@
+{
+  "extensions": [".wav", ".mp3", ".m4a"],
+  "max_upload_mb": 200,
+  "max_audio_seconds": 1800,
+  "max_participants": 200
+}

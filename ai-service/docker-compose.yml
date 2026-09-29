@@ -1,0 +1,72 @@
+services:
+  ai-service:
+    build:
+      context: ..
+      dockerfile: ai-service/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      AI_MODE: ${AI_MODE:-mock}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
+      HF_HOME: /models/huggingface
+      PYANNOTE_CACHE: /models/huggingface/hub
+      HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-1}
+      TRANSFORMERS_OFFLINE: ${TRANSFORMERS_OFFLINE:-1}
+      OLLAMA_URL: http://ollama:11434
+    ports:
+      - "127.0.0.1:${AI_PORT:-8000}:8000"
+    volumes:
+      - ./models:/models
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:0.5.7
+    # AI accepts one inference at a time; four Ollama slots multiply the KV cache.
+    environment:
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+    volumes:
+      - ollama-models:/root/.ollama
+    ports:
+      - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  ollama-model-init:
+    image: ollama/ollama:0.5.7
+    profiles: ["download"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama pull ${LLM_MODEL:-qwen2.5:7b-instruct-q4_K_M}"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  hf-model-init:
+    build:
+      context: ..
+      dockerfile: ai-service/Dockerfile
+    profiles: ["download"]
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+    command:
+      [
+        "python",
+        "scripts/download_models.py",
+        "--model-dir",
+        "/models",
+      ]
+    volumes:
+      - ./models:/models
+
+volumes:
+  ollama-models:

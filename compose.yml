@@ -1,0 +1,101 @@
+name: ai-meeting-minutes
+x-backend: &backend
+  build: {context: ., dockerfile: backend/Dockerfile}
+  environment: &backend-env
+    APP_ENV: ${APP_ENV:-development}
+    DATABASE_URL: postgresql+psycopg://alem:${POSTGRES_PASSWORD:?Run scripts/init_env.py}@db:5432/alem
+    STORAGE_DIR: /data/audio
+    FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8088}
+    COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    AI_MODE: http
+    AI_EXPECTED_MODE: ${AI_EXPECTED_MODE:-mock}
+    AI_BASE_URL: http://ai:8000
+    AI_INTERNAL_TOKEN: ${AI_INTERNAL_TOKEN:?Run scripts/init_env.py}
+    MAX_UPLOAD_MB: 200
+    MAX_AUDIO_SECONDS: 1800
+  volumes: [audio:/data]
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:17.6-bookworm
+    environment:
+      POSTGRES_USER: alem
+      POSTGRES_DB: alem
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run scripts/init_env.py}
+    volumes: [database:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U alem -d alem"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  migrate:
+    <<: *backend
+    command: [python, -m, alembic, upgrade, head]
+    restart: "no"
+    depends_on: {db: {condition: service_healthy}}
+  api:
+    <<: *backend
+    depends_on: {migrate: {condition: service_completed_successfully}}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/ready', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 6
+      start_period: 60s
+  worker:
+    <<: *backend
+    command: [python, -m, app.worker]
+    stop_grace_period: 3700s
+    depends_on: {migrate: {condition: service_completed_successfully}}
+  web:
+    build: {context: ., dockerfile: frontend/Dockerfile}
+    ports: ["127.0.0.1:${WEB_PORT:-8088}:80"]
+    depends_on: {api: {condition: service_healthy}}
+    restart: unless-stopped
+  ai-mock:
+    profiles: [mock]
+    build: {context: ., dockerfile: ai-service/Dockerfile, target: base}
+    environment:
+      AI_MODE: mock
+      INTERNAL_TOKEN: ${AI_INTERNAL_TOKEN:?Run scripts/init_env.py}
+    networks: {default: {aliases: [ai]}}
+    restart: unless-stopped
+  ai-real:
+    profiles: [real]
+    build: {context: ., dockerfile: ai-service/Dockerfile, target: ml}
+    environment:
+      AI_MODE: real
+      INTERNAL_TOKEN: ${AI_INTERNAL_TOKEN:?Run scripts/init_env.py}
+      HF_HOME: /models/huggingface
+      HF_HUB_OFFLINE: 1
+      TRANSFORMERS_OFFLINE: 1
+      MODEL_DIR: /models
+      ASR_DEVICE: cpu
+      ASR_COMPUTE_TYPE: int8
+      DIARIZATION_DEVICE: cpu
+      LOW_MEMORY_MODE: 1
+      OLLAMA_URL: http://ollama:11434
+    networks: {default: {aliases: [ai]}}
+    volumes: [models:/models]
+    depends_on: {ollama: {condition: service_healthy}}
+    restart: unless-stopped
+  ollama:
+    profiles: [real]
+    image: ollama/ollama:0.5.7
+    environment:
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+    volumes: [ollama:/root/.ollama]
+    healthcheck:
+      test: [CMD, ollama, list]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+volumes:
+  database:
+  audio:
+  models:
+  ollama:

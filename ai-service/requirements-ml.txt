@@ -1,0 +1,7 @@
+-r requirements.txt
+faster-whisper==1.1.1
+huggingface-hub==0.28.1
+matplotlib==3.10.6
+pyannote.audio==3.3.2
+torch==2.5.1
+torchaudio==2.5.1

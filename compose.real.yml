@@ -1,0 +1,7 @@
+services:
+  api:
+    environment: {AI_EXPECTED_MODE: real}
+  worker:
+    environment: {AI_EXPECTED_MODE: real}
+  migrate:
+    environment: {AI_EXPECTED_MODE: real}

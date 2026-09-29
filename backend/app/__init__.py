@@ -1,0 +1,1 @@
+"""HackAlem backend application package."""

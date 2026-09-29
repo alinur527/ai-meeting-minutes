@@ -1,0 +1,81 @@
+name: Verify application
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17.6-bookworm
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: isolated-ci-only
+          POSTGRES_DB: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U ci -d postgres"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      TEST_POSTGRES_ADMIN_URL: postgresql+psycopg://ci:isolated-ci-only@127.0.0.1:5432/postgres
+      AI_MODE: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22.16.0', cache: npm, cache-dependency-path: frontend/package-lock.json}
+      - name: Separate Python environments
+        run: |
+          python -m venv backend/.venv
+          python -m venv ai-service/.venv
+          (cd backend && .venv/bin/python -m pip install -r requirements-dev.lock)
+          (cd ai-service && .venv/bin/python -m pip install -r requirements-dev.lock)
+          echo "AI_PYTHON=$GITHUB_WORKSPACE/ai-service/.venv/bin/python" >> "$GITHUB_ENV"
+      - name: PostgreSQL 17 backup clients
+        run: |
+          if [ ! -x /usr/lib/postgresql/17/bin/pg_dump ]; then
+            sudo install -d /usr/share/postgresql-common/pgdg
+            sudo curl --fail --silent --show-error -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+            echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/alem-pgdg.list
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client-17
+          fi
+          /usr/lib/postgresql/17/bin/pg_dump --version
+          /usr/lib/postgresql/17/bin/pg_restore --version
+          echo "PG_BIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
+      - name: Frontend dependencies and browser
+        working-directory: frontend
+        run: |
+          npm ci
+          node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Complete A/B gate with source manifest and mandatory restore
+        run: backend/.venv/bin/python scripts/verify.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-diagnostics
+          path: .artifacts/
+          include-hidden-files: true
+          retention-days: 3
+  containers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      COMPOSE_PROJECT_NAME: alem-ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start isolated mock deployment
+        run: |
+          python3 scripts/init_env.py
+          docker compose --profile mock config --quiet
+          docker compose -f compose.yml -f compose.real.yml --profile real config --quiet
+          docker compose --profile mock up -d --build --wait --wait-timeout 180
+          curl --fail http://localhost:8088/api/ready
+          curl --fail http://localhost:8088/
+      - name: Diagnostics and cleanup
+        if: always()
+        run: |
+          docker compose --profile mock logs --tail 80
+          docker compose --profile mock down
