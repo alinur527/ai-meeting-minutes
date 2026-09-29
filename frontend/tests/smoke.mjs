@@ -191,6 +191,7 @@ try {
   assert.deepEqual([itemPatches, speakerPatches, confirms, exports], [1, 1, 1, 1]);
   await real.getByRole("link", { name: "Новое совещание" }).click();
   await real.waitForURL(`${base}/`);
+  await real.getByRole("heading", { name: "Новое совещание", exact: true }).waitFor();
   assert.equal(await real.locator("audio").count(), 0);
   assert.equal(backendAudioUrl.endsWith("/meetings/real-1/audio"), true);
 
