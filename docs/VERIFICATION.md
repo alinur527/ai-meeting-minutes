@@ -12,6 +12,8 @@ The pre-Git test manifest identifies the tested non-Markdown files with SHA-256 
 
 The real-model measurements below belong to the original working tree; they are not new benchmarks of this public copy. No heavy real inference was repeated for documentation, the example migration URL, the isolated Compose project name or the conservative example memory setting.
 
+The first public Linux CI run passed the container deployment and 10 of 11 A/B checks. Browser smoke exposed a navigation timing race: a URL change preceded React's page render. The test now waits for the visible demo marker before asserting the destination contents. This changes test synchronization, not application behavior. Current public results are available in [GitHub Actions](https://github.com/alinur527/ai-meeting-minutes/actions/workflows/verify.yml).
+
 ## Confirmed baseline — 2026-09-29
 
 | Level / component | Result | What was checked |

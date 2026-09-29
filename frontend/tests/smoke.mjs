@@ -37,6 +37,8 @@ try {
   await page.locator('input[type="file"]').setInputFiles({ name: "demo.wav", mimeType: "audio/wav", buffer: wavFile() });
   await page.getByRole("button", { name: "Обработать совещание" }).click();
   await page.waitForURL("**/meetings/demo");
+  // Navigation can finish before React commits the destination page on CI.
+  await page.getByText("DEMO / MOCK MODE", { exact: true }).waitFor();
   assert.equal(await page.getByText("DEMO / MOCK MODE").count(), 1);
   assert.equal(await page.getByRole("heading", { name: "Краткое содержание" }).count(), 1);
   assert.equal(await page.locator("tbody tr").count(), 3);
