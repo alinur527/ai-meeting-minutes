@@ -225,4 +225,6 @@ Originally developed during the HackAlem AI Hackathon by team **Exit 1** and lat
 
 ## License
 
-No license has been selected yet. Dependencies and separately downloaded model weights retain their own licenses and access terms; see [third-party acknowledgements](docs/THIRD_PARTY.md).
+This project is licensed under the [MIT License](LICENSE). Copyright (c) 2026 Berdibek Alinur.
+
+Dependencies and separately downloaded model weights retain their own licenses and access terms; the project's MIT License does not relicense them. See [third-party acknowledgements](docs/THIRD_PARTY.md).
