@@ -37,8 +37,8 @@ try {
   await page.locator('input[type="file"]').setInputFiles({ name: "demo.wav", mimeType: "audio/wav", buffer: wavFile() });
   await page.getByRole("button", { name: "Обработать совещание" }).click();
   await page.waitForURL("**/meetings/demo");
-  // Navigation can finish before React commits the destination page on CI.
-  await page.getByText("DEMO / MOCK MODE", { exact: true }).waitFor();
+  // The demo badge also exists on the upload page; wait for destination-only content.
+  await page.getByRole("heading", { name: "Краткое содержание", exact: true }).waitFor();
   assert.equal(await page.getByText("DEMO / MOCK MODE").count(), 1);
   assert.equal(await page.getByRole("heading", { name: "Краткое содержание" }).count(), 1);
   assert.equal(await page.locator("tbody tr").count(), 3);
@@ -74,6 +74,7 @@ try {
   await page.getByLabel("Ответственный").selectOption("p1");
   await page.getByLabel("Срок", { exact: true }).fill("2026-10-01");
   await page.getByRole("button", { name: "Сохранить" }).click();
+  await page.getByText("Проверенное поручение", { exact: true }).waitFor();
   assert.equal(await page.getByText("Проверенное поручение").count(), 1);
   if (process.env.TEST_SCREENSHOT_DIR) await page.screenshot({ path: join(process.env.TEST_SCREENSHOT_DIR, "meeting-desktop.png"), fullPage: true });
 
@@ -83,6 +84,7 @@ try {
   await page.waitForFunction(() => document.querySelector("audio")?.currentTime >= 14);
 
   await page.getByRole("button", { name: "Подтвердить протокол" }).click();
+  await page.getByText("Подтверждён", { exact: true }).waitFor();
   assert.equal(await page.getByText("Подтверждён", { exact: true }).count(), 1);
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Скачать DOCX" }).click();
@@ -94,6 +96,7 @@ try {
   const mobile = await browser.newPage({ viewport: { width: 375, height: 812 } });
   mobile.on("pageerror", (error) => errors.push(error.message));
   await mobile.goto(`${base}/meetings/demo`);
+  await mobile.getByRole("heading", { name: "Краткое содержание", exact: true }).waitFor();
   assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   if (process.env.TEST_SCREENSHOT_DIR) await mobile.screenshot({ path: join(process.env.TEST_SCREENSHOT_DIR, "meeting-mobile.png"), fullPage: true });
   await mobile.keyboard.press("Tab");
@@ -103,6 +106,7 @@ try {
   }), true);
   await mobile.getByRole("button", { name: "Посмотреть источник" }).first().focus();
   await mobile.keyboard.press("Enter");
+  await mobile.waitForFunction(() => document.activeElement?.id === "segment-s3" && document.activeElement.classList.contains("is-highlighted"));
   assert.equal(await mobile.locator("#segment-s3").evaluate((el) => el.classList.contains("is-highlighted")), true);
   await mobile.setViewportSize({ width: 320, height: 700 });
   assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
